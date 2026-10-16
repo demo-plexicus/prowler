@@ -45,8 +45,8 @@ variable "s3_integration_bucket_name" {
   default     = ""
 
   validation {
-    condition     = length(var.s3_integration_bucket_name) > 0 || var.s3_integration_bucket_name == ""
-    error_message = "s3_integration_bucket_name must be a valid S3 bucket name."
+    condition     = !var.enable_s3_integration || can(regex("^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$", var.s3_integration_bucket_name))
+    error_message = "s3_integration_bucket_name must be a valid S3 bucket name (3-63 characters, lowercase letters, numbers, dots, and hyphens) when enable_s3_integration is true."
   }
 }
 

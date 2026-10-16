@@ -312,9 +312,41 @@ export const authConfig = {
       const authToken = token as AuthToken;
 
       // Handle tenant switch: update tokens from client-side useSession().update()
+      //
+      // SECURITY: Never trust tokens sent from the browser. The update trigger
+      // data is client-controlled, so an attacker could submit a token belonging
+      // to another user/tenant. Verify the token server-side against the API
+      // (/users/me) before accepting it; if verification fails, keep the
+      // existing (server-issued) token.
       if (trigger === "update" && session?.accessToken) {
+        try {
+          // Verify the token is valid and active server-side via the API.
+          await getUserByMe(session.accessToken);
+
+          // Verify the token belongs to the same user as the current session,
+          // preventing a client from planting another user's token.
+          const decoded = jwtDecode<CustomJwtPayload>(session.accessToken);
+          if (
+            authToken.user_id &&
+            decoded?.sub &&
+            decoded.sub !== authToken.user_id
+          ) {
+            throw new Error(
+              "Session update token does not belong to the session user",
+            );
+          }
+        } catch (error) {
+          // eslint-disable-next-line no-console
+          console.warn(
+            "Rejected unverified token from session update (tenant switch)",
+            error,
+          );
+          return authToken;
+        }
         authToken.accessToken = session.accessToken;
-        authToken.refreshToken = session.refreshToken;
+        if (session?.refreshToken) {
+          authToken.refreshToken = session.refreshToken;
+        }
         applyDecodedClaims(authToken, authToken.accessToken, "tenant switch");
         return authToken;
       }
